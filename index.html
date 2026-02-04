@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="306 Mask - 极简的在线蒙版绘制工具。支持黑白遮罩导出、智能透明区域识别，助力 AI 图像重绘与创作。">
+    <meta name="keywords" content="306Mask, 在线蒙版, 遮罩导出, 图像修补, AI工具, Mask Generator, 免费设计工具">
+    <link rel="icon" href="/favicon.ico">
+    <title>306 Mask | 蒙版绘制工具</title>
+    <style>
+        :root {
+            --bg-body: #ffffff;
+            --text-main: #000000;
+            --btn-bg: #000000;     
+            --btn-text: #ffffff;  
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+            
+            --danger: #ff3b30;
+            --radius-pill: 9999px;
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #000000;
+            --text-main: #ffffff;
+            --btn-bg: #ffffff;    
+            --btn-text: #000000; 
+            
+            --glass-bg: rgba(20, 20, 20, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            
+            --danger: #ff453a;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
+        
+        body { 
+            margin: 0; padding: 0; height: 100vh; overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            cursor: default; 
+            transition: background 0.3s ease;
+        }
+
+        .acrylic-panel {
+            background: var(--glass-bg);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            transition: transform 0.2s, background 0.3s;
+        }
+
+        .top-island {
+            position: fixed; top: 24px; z-index: 100;
+            height: 48px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: var(--radius-pill);
+            padding: 0 6px;
+        }
+        .island-left { left: 24px; padding: 0 20px; }
+        .island-right { right: 24px; gap: 8px; padding: 0 8px; }
+
+        h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; margin: 0; }
+
+        .icon-btn {
+            width: 36px; height: 36px;
+            border: none; background: transparent;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+        }
+        .icon-btn:hover { background-color: var(--text-main); color: var(--bg-body); }
+        .icon-btn.active { background-color: var(--text-main); color: var(--bg-body); }
+        .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+        .text-switch {
+            font-size: 12px; font-weight: 800; padding: 0 12px; height: 32px;
+            border-radius: 99px; cursor: pointer; border: 1px solid var(--glass-border);
+            background: rgba(125,125,125,0.1); color: var(--text-main);
+            display: flex; align-items: center;
+        }
+
+        #toolbar {
+            position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%);
+            height: 64px;
+            border-radius: var(--radius-pill);
+            display: flex; align-items: center; gap: 12px;
+            padding: 0 24px;
+            z-index: 100;
+        }
+
+        .divider { width: 1px; height: 24px; background: var(--glass-border); margin: 0 8px; }
+
+        input[type="range"] {
+            -webkit-appearance: none; width: 100px; height: 4px;
+            background: var(--glass-border); border-radius: 2px; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 16px; height: 16px;
+            background: var(--text-main); border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        #workspace { 
+            width: 100%; height: 100%; 
+            display: flex; justify-content: center; align-items: center; 
+            position: relative;
+        }
+        
+        .canvas-active { cursor: none; }
+
+        #canvas-view { position: relative; box-shadow: 0 0 0 1px var(--glass-border); }
+        canvas { display: block; }
+        #maskCanvas { position: absolute; top: 0; left: 0; mix-blend-mode: normal; opacity: 0.6; }
+        #empty-state {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; opacity: 1; 
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+            z-index: 10;
+        }
+        
+        .upload-btn {
+            background: var(--btn-bg);  
+            color: var(--btn-text);    
+            padding: 14px 40px; border-radius: 99px;
+            font-weight: 800; font-size: 15px; border: none; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .upload-btn:hover { transform: scale(1.03); opacity: 0.95; }
+
+        #brush-cursor {
+            position: fixed; pointer-events: none; z-index: 900;
+            border: 1px solid var(--text-main);
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%; transform: translate(-50%, -50%);
+            display: none;
+        }
+
+        #custom-tooltip {
+            position: fixed; pointer-events: none; z-index: 1000;
+            background: var(--btn-bg); color: var(--btn-text);
+            padding: 6px 12px; border-radius: 8px;
+            font-size: 12px; font-weight: 600;
+            opacity: 0; transform: translateY(5px); transition: opacity 0.15s, transform 0.15s;
+        }
+        #custom-tooltip.show { opacity: 1; transform: translateY(0); }
+
+        .modal-mask {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.2); backdrop-filter: blur(5px);
+            z-index: 200; display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-mask.open { opacity: 1; pointer-events: auto; }
+        .modal-card {
+            background: var(--bg-body); border: 1px solid var(--glass-border);
+            width: 300px; padding: 24px; border-radius: 24px;
+            text-align: center; box-shadow: var(--glass-shadow);
+        }
+        .modal-btns { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-btn { flex: 1; padding: 10px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; }
+        .btn-sec { background: rgba(125,125,125,0.1); color: var(--text-main); }
+        .btn-pri { background: var(--danger); color: white; }
+        
+        .hidden { display: none !important; }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="brush-cursor"></div>
+<div id="custom-tooltip">Tip</div>
+
+<div class="acrylic-panel top-island island-left">
+    <h1>306 Mask</h1>
+</div>
+
+<div class="acrylic-panel top-island island-right">
+    <button class="text-switch" id="lang-btn" data-tooltip="switchLang">ZH</button>
+    <button class="icon-btn" id="theme-btn" data-tooltip="switchTheme">
+        <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+    </button>
+</div>
+
+<main id="workspace">
+    <div id="empty-state">
+        
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.3; margin-bottom:10px;"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5.04-6.71l-2.75 3.54-1.96-2.36L6.5 17h11l-3.54-4.71z"/></svg>
+
+        <p data-i18n="dragText" style="opacity: 0.6; font-size: 14px;">拖拽图片至此</p>
+        <button class="upload-btn" onclick="document.getElementById('file-input').click()" data-i18n="uploadBtn" data-tooltip="uploadTip">选择图片</button>
+    </div>
+
+    <div id="canvas-view" class="hidden">
+        <canvas id="imageCanvas"></canvas>
+        <canvas id="maskCanvas"></canvas>
+    </div>
+</main>
+
+<div id="toolbar" class="acrylic-panel hidden">
+    <button class="icon-btn active" id="btn-brush" onclick="setTool('brush')" data-tooltip="brush">
+        <svg viewBox="0 0 24 24"><path d="M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34c-.39-.39-1.02-.39-1.41 0L9 12.25 11.75 15l8.96-8.96c.39-.39.39-1.02 0-1.41z"/></svg>
+    </button>
+    <button class="icon-btn" id="btn-eraser" onclick="setTool('eraser')" data-tooltip="eraser">
+        <svg viewBox="0 0 24 24"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l8.48-8.48-3.54-3.54-11.31 8.49z"/></svg>
+    </button>
+
+    <div class="divider"></div>
+    <input type="range" id="brush-size" min="5" max="150" value="30" data-tooltip="size">
+    <div class="divider"></div>
+
+    <button class="icon-btn" onclick="undo()" data-tooltip="undo">
+        <svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+    </button>
+    <button class="icon-btn" onclick="autoMask()" data-tooltip="autoMask">
+        <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 15.92c-.02.03-.06.06-.08.08H3V5.08L3.08 5h17.83c.03.02.06.06.08.08v13.84zm-10-3.41L8.5 12.5 5 17h14l-4.5-6-3.5 4.51z"/></svg>
+    </button>
+    <button class="icon-btn" onclick="askReset()" data-tooltip="reset">
+        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+    </button>
+    
+    <div class="divider"></div>
+    <button class="upload-btn" onclick="exportMask()" style="padding: 0 20px; height: 36px; font-size: 13px;" data-i18n="exportBtn" data-tooltip="exportTip">导出</button>
+</div>
+
+<input type="file" id="file-input" accept="image/*">
+
+<div id="modal-mask" class="modal-mask">
+    <div class="modal-card">
+        <h3 id="modal-title" style="margin:0 0 8px 0;">重置画布?</h3>
+        <p id="modal-desc" style="margin:0; opacity:0.6; font-size:14px;">将清空所有绘制内容且无法撤销。</p>
+        <div class="modal-btns">
+            <button class="modal-btn btn-sec" onclick="closeModal()" data-i18n="cancelBtn">取消</button>
+            <button class="modal-btn btn-pri" onclick="confirmReset()" data-i18n="confirmBtn">确认清空</button>
+        </div>
+    </div>
+</div>
+
+<script>
+        const i18nData = {
+        zh: {
+            title: "306 Mask | 蒙版绘制工具",
+            dragText: "拖拽图片至此 / 空格+拖拽移动 / Alt+滚轮缩放",
+            uploadBtn: "上传图片",
+            exportBtn: "导出蒙版",
+            cancelBtn: "取消",
+            confirmBtn: "确认清空",
+            modalTitle: "重置画布?",
+            modalDesc: "将清空所有绘制内容且无法撤销。",
+            tooltips: {
+                switchLang: "Switch English", switchTheme: "主题", uploadTip: "点击上传",
+                brush: "画笔", eraser: "橡皮擦", size: "笔刷大小", undo: "撤销 (Ctrl+Z)",
+                autoMask: "智能识别透明底", reset: "清空画布", exportTip: "导出黑白遮罩"
+            }
+        },
+        en: {
+            title: "306 Mask | Masking Tool",
+            dragText: "Drag and drop images here / Spacebar + drag to move / Alt + scroll wheel to zoom",
+            uploadBtn: "Upload Image",
+            exportBtn: "Export Mask",
+            cancelBtn: "Cancel",
+            confirmBtn: "Clear",
+            modalTitle: "Clear Canvas?",
+            modalDesc: "Cannot be undone.",
+            tooltips: {
+                switchLang: "切换中文", switchTheme: "Theme", uploadTip: "Click to Upload",
+                brush: "Brush", eraser: "Eraser", size: "Size", undo: "Undo (Ctrl+Z)",
+                autoMask: "Auto Alpha Mask", reset: "Reset", exportTip: "Export Binary"
+            }
+        }
+    };
+
+    let state = { lang: 'zh', scale: 1, pan: {x:0, y:0}, isPanning: false, isDrawing: false, brushSize: 30, tool: 'brush' };
+    let history = [], historyStep = -1, originalImage = null;
+
+    const cvsView = document.getElementById('canvas-view');
+    const iCanvas = document.getElementById('imageCanvas');
+    const mCanvas = document.getElementById('maskCanvas');
+    const iCtx = iCanvas.getContext('2d');
+    const mCtx = mCanvas.getContext('2d');
+    const cursor = document.getElementById('brush-cursor');
+    const tooltip = document.getElementById('custom-tooltip');
+
+    function init() {
+        if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+        updateText();
+        setupEvents();
+    }
+
+    function setupEvents() {
+        cvsView.addEventListener('mouseenter', () => {
+            if (!state.isPanning) {
+                cvsView.classList.add('canvas-active');
+                cursor.style.display = 'block';
+            }
+        });
+        cvsView.addEventListener('mouseleave', () => {
+            cvsView.classList.remove('canvas-active');
+            cursor.style.display = 'none';
+        });
+
+        window.addEventListener('mousemove', e => {
+            if(cursor.style.display === 'block') {
+                cursor.style.left = e.clientX + 'px';
+                cursor.style.top = e.clientY + 'px';
+            }
+            if(tooltip.classList.contains('show')) {
+                let x = e.clientX;
+                let y = e.clientY - 40;
+                if(x < 50) x = 50; 
+                if(x > window.innerWidth - 50) x = window.innerWidth - 50;
+                if(y < 10) y = e.clientY + 20;
+
+                tooltip.style.left = x + 'px';
+                tooltip.style.top = y + 'px';
+            }
+            if(state.isDrawing) draw(e);
+        });
+
+        document.getElementById('file-input').addEventListener('change', e => loadImage(e.target.files[0]));
+        document.body.addEventListener('dragover', e => e.preventDefault());
+        document.body.addEventListener('drop', e => { e.preventDefault(); loadImage(e.dataTransfer.files[0]); });
+        
+        mCanvas.addEventListener('pointerdown', startDraw);
+        window.addEventListener('pointerup', endDraw); 
+        document.addEventListener('wheel', handleWheel, { passive: false });
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space') {
+                state.isPanning = true;
+                document.getElementById('workspace').style.cursor = 'grab';
+                cursor.style.display = 'none'; 
+                cvsView.classList.remove('canvas-active');
+            }
+            if((e.ctrlKey||e.metaKey) && e.key === 'z') undo();
+            if(e.key === 'b') setTool('brush');
+            if(e.key === 'e') setTool('eraser');
+        });
+        document.addEventListener('keyup', e => {
+            if (e.code === 'Space') {
+                state.isPanning = false;
+                document.getElementById('workspace').style.cursor = 'default';
+            }
+        });
+        const ws = document.getElementById('workspace');
+        ws.addEventListener('mousedown', startPan);
+        window.addEventListener('mousemove', movePan);
+        window.addEventListener('mouseup', endPan);
+
+        document.getElementById('brush-size').addEventListener('input', e => {
+            state.brushSize = parseInt(e.target.value);
+            updateCursorSize();
+        });
+        document.querySelectorAll('[data-tooltip]').forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                tooltip.textContent = i18nData[state.lang].tooltips[el.dataset.tooltip];
+                tooltip.classList.add('show');
+            });
+            el.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+        });
+    }
+    function loadImage(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                originalImage = img;
+                iCanvas.width = mCanvas.width = img.width;
+                iCanvas.height = mCanvas.height = img.height;
+                iCtx.drawImage(img, 0, 0);
+                mCtx.clearRect(0,0,img.width, img.height);
+                
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('canvas-view').classList.remove('hidden');
+                document.getElementById('toolbar').classList.remove('hidden');
+                
+                resetView();
+                saveState();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function resetView() {
+        const pad = 100;
+        state.scale = Math.min((window.innerWidth-pad)/originalImage.width, (window.innerHeight-pad)/originalImage.height);
+        updateTransform();
+    }
+    
+    function updateTransform() {
+        cvsView.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.scale})`;
+        updateCursorSize();
+    }
+
+    function updateCursorSize() {
+        const s = state.brushSize * state.scale;
+        cursor.style.width = s + 'px';
+        cursor.style.height = s + 'px';
+    }
+    function getPos(e) {
+        const rect = mCanvas.getBoundingClientRect();
+        return { x: (e.clientX - rect.left)/state.scale, y: (e.clientY - rect.top)/state.scale };
+    }
+    
+    function startDraw(e) {
+        if(state.isPanning || e.button !== 0) return;
+        state.isDrawing = true;
+        mCtx.beginPath();
+        const p = getPos(e);
+        mCtx.moveTo(p.x, p.y);
+        mCtx.lineCap = 'round'; mCtx.lineJoin = 'round'; mCtx.lineWidth = state.brushSize;
+        mCtx.globalCompositeOperation = state.tool==='brush' ? 'source-over' : 'destination-out';
+        mCtx.strokeStyle = state.tool==='brush' ? 'rgba(255,0,0,0.6)' : '#000';
+        draw(e);
+    }
+    function draw(e) { 
+        if(state.isDrawing) { 
+            const p = getPos(e); 
+            mCtx.lineTo(p.x, p.y); 
+            mCtx.stroke(); 
+        } 
+    }
+    
+    function endDraw() { 
+        if(state.isDrawing) { 
+            state.isDrawing=false; 
+            mCtx.closePath(); 
+            saveState(); 
+        } 
+    }
+    let dragStart = {x:0, y:0};
+    function startPan(e) { if(state.isPanning) { dragStart={x:e.clientX-state.pan.x, y:e.clientY-state.pan.y}; } }
+    function movePan(e) { 
+        if(state.isPanning && e.buttons===1) { 
+            state.pan.x = e.clientX-dragStart.x; 
+            state.pan.y = e.clientY-dragStart.y; 
+            updateTransform(); 
+        } 
+    }
+    function endPan() {}
+    
+    function handleWheel(e) {
+        if(e.altKey && originalImage) {
+            e.preventDefault();
+            state.scale = Math.max(0.1, Math.min(5, state.scale + (-Math.sign(e.deltaY)*0.1)));
+            updateTransform();
+        }
+    }
+
+    function setTool(t) {
+        state.tool = t;
+        document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(t==='brush'?'btn-brush':'btn-eraser').classList.add('active');
+    }
+    function undo() {
+        if(historyStep>0) {
+            historyStep--;
+            const img=new Image(); 
+            img.onload=()=>{
+                mCtx.clearRect(0,0,mCanvas.width,mCanvas.height);
+                mCtx.drawImage(img,0,0);
+            };
+            img.src=history[historyStep];
+        }
+    }
+    function saveState() {
+        historyStep++; history=history.slice(0,historyStep);
+        history.push(mCanvas.toDataURL());
+        if(history.length>20){ history.shift(); historyStep--; }
+    }
+    function autoMask() {
+        if(!originalImage)return;
+        const tC=document.createElement('canvas'); tC.width=iCanvas.width; tC.height=iCanvas.height;
+        tC.getContext('2d').drawImage(originalImage,0,0);
+        const sD=tC.getContext('2d').getImageData(0,0,tC.width,tC.height).data;
+        const mD=mCtx.getImageData(0,0,mCanvas.width,mCanvas.height);
+        for(let i=0;i<sD.length;i+=4) if(sD[i+3]>10) { mD.data[i]=255; mD.data[i+3]=153; }
+        mCtx.putImageData(mD,0,0); saveState();
+    }
+    function exportMask() {
+        if(!originalImage)return;
+        const c=document.createElement('canvas'); c.width=iCanvas.width; c.height=iCanvas.height;
+        const ctx=c.getContext('2d'); ctx.fillStyle='black'; ctx.fillRect(0,0,c.width,c.height);
+        ctx.drawImage(mCanvas,0,0);
+        const d=ctx.getImageData(0,0,c.width,c.height);
+        for(let i=0;i<d.data.length;i+=4) d.data[i]>0 ? (d.data[i]=d.data[i+1]=d.data[i+2]=d.data[i+3]=255) : (d.data[i+3]=255);
+        ctx.putImageData(d,0,0);
+        const a=document.createElement('a'); a.download='mask.png'; a.href=c.toDataURL(); a.click();
+    }
+
+    function updateText() {
+        const t = i18nData[state.lang];
+        document.title = t.title; 
+        document.querySelector('[data-i18n="dragText"]').textContent = t.dragText;
+        document.querySelector('[data-i18n="uploadBtn"]').textContent = t.uploadBtn;
+        document.querySelector('[data-i18n="exportBtn"]').textContent = t.exportBtn;
+        document.querySelector('[data-i18n="cancelBtn"]').textContent = t.cancelBtn;
+        document.querySelector('[data-i18n="confirmBtn"]').textContent = t.confirmBtn;
+        document.getElementById('modal-title').textContent = t.modalTitle;
+        document.getElementById('modal-desc').textContent = t.modalDesc;
+        document.getElementById('lang-btn').textContent = state.lang==='zh'?'ZH':'EN';
+    }
+    function askReset(){document.getElementById('modal-mask').classList.add('open');}
+    function closeModal(){document.getElementById('modal-mask').classList.remove('open');}
+    function confirmReset(){mCtx.clearRect(0,0,mCanvas.width,mCanvas.height);saveState();closeModal();}
+    
+    document.getElementById('lang-btn').addEventListener('click', ()=>{state.lang=state.lang==='zh'?'en':'zh';updateText();});
+    document.getElementById('theme-btn').addEventListener('click', ()=>{
+        const h=document.documentElement; h.setAttribute('data-theme', h.getAttribute('data-theme')==='dark'?'light':'dark');
+    });
+
+    init();
+</script>
+</body>
+</html>
