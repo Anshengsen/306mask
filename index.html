@@ -178,7 +178,7 @@
 <div id="custom-tooltip">Tip</div>
 
 <div class="acrylic-panel top-island island-left">
-    <h1>306 Mask</h1>
+    <h1 style="cursor: pointer;" onclick="window.location.reload();">306 Mask</h1>
 </div>
 
 <div class="acrylic-panel top-island island-right">
@@ -276,7 +276,7 @@
         }
     };
 
-    let state = { lang: 'zh', scale: 1, pan: {x:0, y:0}, isPanning: false, isDrawing: false, brushSize: 30, tool: 'brush' };
+    let state = { lang: localStorage.getItem('306mask_lang') || 'zh', scale: 1, pan: {x:0, y:0}, isPanning: false, isDrawing: false, brushSize: 30, tool: 'brush' };
     let history = [], historyStep = -1, originalImage = null;
 
     const cvsView = document.getElementById('canvas-view');
@@ -288,7 +288,10 @@
     const tooltip = document.getElementById('custom-tooltip');
 
     function init() {
-        if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+        const savedTheme = localStorage.getItem('306mask_theme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
             document.documentElement.setAttribute('data-theme', 'light');
         }
         updateText();
@@ -513,9 +516,16 @@
     function closeModal(){document.getElementById('modal-mask').classList.remove('open');}
     function confirmReset(){mCtx.clearRect(0,0,mCanvas.width,mCanvas.height);saveState();closeModal();}
     
-    document.getElementById('lang-btn').addEventListener('click', ()=>{state.lang=state.lang==='zh'?'en':'zh';updateText();});
+    document.getElementById('lang-btn').addEventListener('click', ()=>{
+        state.lang = state.lang === 'zh' ? 'en' : 'zh';
+        localStorage.setItem('306mask_lang', state.lang);
+        updateText();
+    });
     document.getElementById('theme-btn').addEventListener('click', ()=>{
-        const h=document.documentElement; h.setAttribute('data-theme', h.getAttribute('data-theme')==='dark'?'light':'dark');
+        const h = document.documentElement; 
+        const newTheme = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        h.setAttribute('data-theme', newTheme);
+        localStorage.setItem('306mask_theme', newTheme);
     });
 
     init();
